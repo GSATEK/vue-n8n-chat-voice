@@ -5,14 +5,37 @@ import '@n8n/chat/style.css'
 import { createChat } from '@n8n/chat'
 import { onMounted } from 'vue'
 
+// const sessionId = crypto.randomUUID().replace(/-/g, '');
+const URL = 'http://localhost:5678/webhook/7f7f0a20-c0dd-482c-89e6-0c0fbd853f28/chat'
+const sendAudioMessage = async (audioBlob, sessionId) => {
+    const fd = new FormData();
+    fd.append('sessionId', sessionId);
+    fd.append('type', 'audio')
+    fd.append('chatInput', audioBlob, 'audio.webm')
+
+    try {
+        const response = await fetch(URL, {
+            method: 'post',
+            body: fd
+        })
+        const data = await response.json();
+        
+        const botResponseText = data.output;
+        return botResponseText;
+        // messages.value.push({type: 'text', content: data.output, sender: 'agent'})
+    } catch (error) {
+        console.log(error)
+    }
+}
 onMounted(() => {
   const chatOptions = {
-    webhookUrl: 'https://gsatek.app.n8n.cloud/webhook/cb398a6b-c11d-434d-ad62-765d1cd88340/chat',
-    chatSessionKey: 'chatwoot',
+    webhookUrl: URL, //'https://gsatek.app.n8n.cloud/webhook/cb398a6b-c11d-434d-ad62-765d1cd88340/chat',
+    chatSessionKey: 'sessionId',
     allowFileUploads: true,
   }
   const chat = createChat(chatOptions)
-
+console.log(chat.config.globalProperties.$chat)
+  // Cada 500ms verificamos si ya cargó el DOM
   const interval = setInterval(() => {
     const controls = document.querySelector('.chat-inputs-controls')
     const stopSVG = `<img src="/src/assets/record.svg" alt="Stop" width="20" height="20" />`
@@ -111,14 +134,29 @@ onMounted(() => {
             mediaRecorder.addEventListener('stop', async () => {
               const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
               const file = new File([audioBlob], 'audio.webm', { type: 'audio/webm' })
-              console.log('file', file)
+              
 
               // Detener animación de ondas
               cancelAnimationFrame(animationId)
               audioContext.close()
               wavesContainer.style.display = 'none'
 
-              chat.config.globalProperties.$chat.sendMessage('audio', [file])
+              const userMessage = {
+                id: crypto.randomUUID(),
+                sender: 'user',
+                text: `🔊 audio`,
+                files: [file]
+              }
+              chat.config.globalProperties.$chat.messages.value.push(userMessage)
+              // chat.config.globalProperties.$chat.sendMessage('audio', [file])
+              const botResponse = await sendAudioMessage(audioBlob, chat.config.globalProperties.$chat.currentSessionId.value)
+              
+              const msg = {
+                id: crypto.randomUUID(),
+                sender: 'bot',
+                text: botResponse
+              }
+              chat.config.globalProperties.$chat.messages.value.push(msg)
             })
 
             // Activar animación
@@ -166,7 +204,7 @@ onMounted(() => {
 
       <nav>
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
+        
       </nav>
     </div>
   </header>
